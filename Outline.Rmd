@@ -170,11 +170,19 @@ for (i  in 1:67) {
 #County Results 
 ```{r}
 county_results = select(county_expectations, state, FIPS) %>%
-  mutate(dem_votes = as.numeric(NA), rep_votes = as.numeric(NA))
+  mutate(dem_votes.results = as.numeric(NA), rep_votes.results = as.numeric(NA), pct_complete = as.numeric(NA))
 
 ###sample results
-county_results[county_results$FIPS==1001,]$dem_votes = 5000
-county_results[county_results$FIPS==1001,]$rep_votes = 20000
+county_results[county_results$FIPS==1001,] = county_results[county_results$FIPS==1001,] %>%
+  mutate(dem_votes.results = 5000, rep_votes.results = 20000, pct_complete = 1.00)
+
+
+county_results = county_results %>%
+  mutate(two_party_votes.results = dem_votes.results+rep_votes.results,
+         dem_pct.results = dem_votes.results/two_party_votes.results,
+         rep_pct.results = rep_votes.results/two_party_votes.results)
+
+
 ```
 
 #County Turnout Estimates 
