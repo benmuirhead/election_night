@@ -1,0 +1,208 @@
+---
+title: "R Notebook"
+output: 
+  html_notebook:
+    toc: yes
+---
+
+
+#Outline
+
+####Question to answer:
+**At the start of the night, we have certain expectations for results. As some results come in, we can update two things: one, the actual results; and two, our previous predictions for some/all counties**
+
+1. Inputs:
+  How similar are counties? If we see an unexpected movement in county A, what should that change about our expectations of county B?
+    Build a matrix that scores every county by every other (3111x3111)
+    
+When a new county result comes in, it needs to be compared to the expectation for that county. The difference should be applied to each county, weighted by the relationship above
+
+This adjustment should be weighted to the percent reporting (squared?), so that a completed county has far more weight
+
+###Notes:
+- **Output County** - All the below calculations are calculated independently for each county, referred to below as Output County. This process happens once for each county
+- **Input Counties** - many calculations for a single output county rely on a series of formulas across all other counties. In a formula, these are referred to as the Input Counties (in practice, the Input Counties include the destination Output County, but the value for it is usually NA or 0)
+
+###Tables:
+- County Expectations - expected result for county - could just be 2016 results with uniform shift, but can probably do better
+- County Turnout Expectations - expected turnout for county
+- Demographic Relationship - For each Output County, a row with a value for all Input Counties. Need to calibrate the scale but in general values range from 0.001 to 2 or 3, with some up to 50. Higher number means that an unexpected result in the Input County should have a large impact on the Output County
+- County Results - start blank, gets filled in. Probably also need a percent completed
+- County Turnout Estimates - starts out the same as expectations, but gets adjusted based on results and (results / pct completed)
+- County Internal Prediction - adjust county expectations by results, weighted by pct completed. At 0% completed, returns expectations. At 100% completed, returns results
+- County Adjustments - For all Output Counties, the difference between Internal Prediction and results. Starts at 0 for all, as there are no results
+- County Adjustments Weight - weight adjustments by pct of Output County completed, and maybe also size of county?
+- County Turnout Adjustments - difference between expectations and results
+- County Turnout Adjustments Weight - weight adjustments by pct completed, and maybe also size of county?
+
+- County External Prediction - For each Output County, build an adjustment score based on the sum of the Internal Counties' deographic relationship x (County Adjustment x County Adjustment Weight ).  Weight the adjustment score by the pct of the output county reporting - at 100% reporting, the adjustment score should be reduced to zero, regardless of what the internal counties' result. THe external Prediction for each OUtput County starts out matching county expectations, and moves towards the internal prediction as results come in, and moves towards all the other counties as they come in.
+
+- County Turnout Predictions - starts out the same as county expectations, but gets adjusted by Demographic Relationship x (County Turnout Adjustments x County Turnout Adjustment Weights)
+
+#Load Packages
+(Hidden)
+```{r echo=FALSE}
+library(ggplot2)
+library(ggcorrplot)
+#library(class)
+library(neighbr)
+library(caret)
+library(tictoc)
+library(doParallel)
+library(foreach)
+library(tidyverse)
+```
+
+#County Expectations 
+```{r}
+#### Filter to only AL
+
+countypres_2000_2016 <- read.csv("countypres_2000-2016.csv",stringsAsFactors = FALSE)
+#str(countypres_2000_2016)
+
+countypres_2016 = countypres_2000_2016 %>%
+  filter(year==2016 & party %in% c("democrat","republican") & state_po=="AL") %>%
+  select(state_po,FIPS,party,candidatevotes) %>%
+  group_by(FIPS) %>%
+  mutate(two_party_votes = sum(candidatevotes)) %>%
+  ungroup() 
+
+county_expectations = countypres_2016 %>%
+  filter(party=="republican") %>%
+  select(FIPS, candidatevotes) %>%
+  right_join(countypres_2016,by="FIPS") %>%
+  filter(party=="democrat") %>%
+  rename(state=state_po,rep_votes = candidatevotes.x,dem_votes = candidatevotes.y) %>%
+  select(state,FIPS,dem_votes,rep_votes,two_party_votes) %>%
+  mutate(dem_pct = dem_votes/two_party_votes,rep_pct = rep_votes/two_party_votes)
+
+
+```
+
+
+#County Turnout Expectations
+```{r}
+county_turnout_expectations = select(county_expectations, FIPS, two_party_votes)
+```
+
+#Demographic Relationship 
+```{r}
+#Load Data
+num_cores = detectCores()
+registerDoParallel(num_cores)
+
+context = read.csv("election-context-2018.txt",header = TRUE,sep = ",")
+
+#### Filter to only AL
+context = context[context$state == "Alabama",]
+
+
+#Bad Rows
+#context[is.na(context["cvap"]),]
+
+#remove Bedford VA - has been replaced
+context = context[context$fips != 51515,]
+
+#Set KC and Ogala to have all zeros in NA fields - currently no data
+#context[context$fips == 36000 | context$fips == 46113 ,]
+context[is.na(context["cvap"]),][is.na(context[is.na(context["cvap"]),])] = 0
+
+#Cols to keep
+cols_list = colnames(context[,23:39])
+cols_list = cols_list[!cols_list %in% c("nonwhite_pct", "lesshs_whites_pct", "lesscollege_whites_pct", "ruralurban_cc","clf_unemploy_pct","cvap")]
+
+#Keep fips and cols_list
+cleaned_context = context[!is.na(context["cvap"]),c("fips",cols_list)]
+
+#Same thing as above
+cleaned_context_numeric = context[!is.na(context["cvap"]),c("fips",cols_list)]
+
+#set range of cols to be 0 to 1
+preProcessValues=preProcess(cleaned_context_numeric[cols_list],method = "range",rangeBounds = c(0,1))
+clean_context_numeric_transformed = predict(object = preProcessValues, cleaned_context_numeric)
+```
+##Build Scores Table
+```{r}
+#Build Scores - takes 1 hour (5 seconds per row x 3100 rows)
+tic()
+scores = foreach (i = 1:nrow(clean_context_numeric_transformed), .combine='rbind', .packages = "foreach") %dopar% {
+  #scores[[i]] = numeric(nrow(clean_context_numeric_transformed))
+  x = clean_context_numeric_transformed[i,-1]
+  foreach (j = 1:nrow(clean_context_numeric_transformed), .combine = 'c') %do% {
+    
+    if(i==j){
+      #scores[[i]][j] = 
+      NA
+      #print(NA)
+    } else {
+      y = clean_context_numeric_transformed[j,-1]
+      #scores[[i]][j] = 
+      round((sum((x-y)^2)),2)
+      #print(j)
+      #print(scores[[i]][j])
+      
+    }
+    
+  }
+}
+toc()
+```
+###Explore Scores Table
+```{r}
+#67 by 67 matrix
+str(scores)
+
+#to get the closest match for a row, use:
+x = c()
+for (i  in 1:67) {
+  row_to_search = i
+  closest_match = order(1/scores[row_to_search,],decreasing = TRUE,na.last = TRUE)[1]
+  x = c(x, (1/scores[row_to_search,closest_match]))
+  #print(clean_context_numeric_transformed[c(row_to_search,closest_match),])
+  
+}
+#hist(x,10)
+
+```
+
+
+
+#County Results 
+```{r}
+county_results = select(county_expectations, state, FIPS) %>%
+  mutate(dem_votes = as.numeric(NA), rep_votes = as.numeric(NA))
+
+###sample results
+county_results[county_results$FIPS==1001,]$dem_votes = 5000
+county_results[county_results$FIPS==1001,]$rep_votes = 20000
+```
+
+#County Turnout Estimates 
+```{r}
+county_turnout_estimate = select(county_expectations, state, FIPS, dem_votes, rep_votes) %>%
+  mutate(total_votes = dem_votes+rep_votes) %>%
+  select(-dem_votes,-rep_votes)
+```
+
+#County Adjustments
+```{r}
+#Compute county_results stats
+county_results = county_results %>%
+  mutate(two_party_votes = dem_votes+rep_votes,
+         dem_pct = dem_votes/two_party_votes,
+         rep_pct = rep_votes/two_party_votes)
+
+county_differences = county_results %>%
+  left_join(county_expectations, by= "FIPS") %>%
+  mutate(dem_difference = dem_pct.x - dem_pct.y) %>%
+  select(state = state.x, FIPS, dem_difference)
+
+
+```
+
+#County Adjustments Weight
+#County Turnout Adjustments
+#County Turnout Adjustments Weight
+#County Predictions
+#County Turnout Predictions
+
