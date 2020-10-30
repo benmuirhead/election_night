@@ -72,9 +72,9 @@ county_expectations = countypres_2016 %>%
   select(FIPS, candidatevotes) %>%
   right_join(countypres_2016,by="FIPS") %>%
   filter(party=="democrat") %>%
-  rename(state=state_po,rep_votes = candidatevotes.x,dem_votes = candidatevotes.y) %>%
-  select(state,FIPS,dem_votes,rep_votes,two_party_votes) %>%
-  mutate(dem_pct = dem_votes/two_party_votes,rep_pct = rep_votes/two_party_votes)
+  #rename(state=state_po,dem_votes.exp = candidatevotes.y, rep_votes.exp = candidatevotes.x) %>%
+  select(state=state_po,FIPS,dem_votes.exp = candidatevotes.y, rep_votes.exp = candidatevotes.x,two_party_votes.exp = two_party_votes) %>%
+  mutate(dem_pct.exp = dem_votes.exp/two_party_votes.exp,rep_pct.exp = rep_votes.exp/two_party_votes.exp)
 
 
 ```
@@ -82,7 +82,7 @@ county_expectations = countypres_2016 %>%
 
 #County Turnout Expectations
 ```{r}
-county_turnout_expectations = select(county_expectations, FIPS, two_party_votes)
+county_turnout_expectations = select(county_expectations, FIPS, two_party_votes.exp)
 ```
 
 #Demographic Relationship 
@@ -187,9 +187,7 @@ county_results = county_results %>%
 
 #County Turnout Estimates 
 ```{r}
-county_turnout_estimate = select(county_expectations, state, FIPS, dem_votes, rep_votes) %>%
-  mutate(total_votes = dem_votes+rep_votes) %>%
-  select(-dem_votes,-rep_votes)
+county_turnout_estimate = select(county_expectations, state, FIPS, two_party_votes.exp)
 ```
 
 #County Internal Predictions
@@ -201,8 +199,8 @@ county_results[,"pct_complete"][is.na(county_results[,"pct_complete"])] = 0
 
 #Set Internal Prediction to Results, backfilling any missing results with expectations
 county_internal_predictions = left_join(county_expectations, county_results, by="FIPS") %>%
-  mutate(dem_votes.ip = dem_votes.results + dem_votes * (1 - pct_complete),
-         rep_votes.ip = rep_votes.results + rep_votes * (1 - pct_complete),
+  mutate(dem_votes.ip = dem_votes.results + dem_votes.exp * (1 - pct_complete),
+         rep_votes.ip = rep_votes.results + rep_votes.exp * (1 - pct_complete),
          two_party_votes.ip = dem_votes.ip + rep_votes.ip,
          dem_pct.ip = dem_votes.ip/two_party_votes.ip,
          rep_pct.ip = rep_votes.ip/two_party_votes.ip
@@ -215,9 +213,9 @@ county_internal_predictions = left_join(county_expectations, county_results, by=
 ```{r}
 #Compute county_results stats
 
-county_differences = county_results %>%
+county_differences = county_internal_predictions %>%
   left_join(county_expectations, by= "FIPS") %>%
-  mutate(dem_difference = dem_pct.x - dem_pct.y) %>%
+  mutate(dem_difference = dem_pct.ip - dem_pct.exp) %>%
   select(state = state.x, FIPS, dem_difference)
 
 
