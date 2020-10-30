@@ -31,8 +31,8 @@ This adjustment should be weighted to the percent reporting (squared?), so that 
 - County Turnout Estimates - starts out the same as expectations, but gets adjusted based on results and (results / pct completed)
 - County Internal Prediction - adjust county expectations by results, weighted by pct completed. At 0% completed, returns expectations. At 100% completed, returns results
 - County Adjustments - For all Output Counties, the difference between Internal Prediction and results. Starts at 0 for all, as there are no results
-- County Adjustments Weight - weight adjustments by pct of Output County completed, and maybe also size of county?
 - County Turnout Adjustments - difference between expectations and results
+- County Adjustments Weight - weight adjustments by pct of Output County completed, and maybe also size of county?
 - County Turnout Adjustments Weight - weight adjustments by pct completed, and maybe also size of county?
 
 - County External Prediction - For each Output County, build an adjustment score based on the sum of the Internal Counties' deographic relationship x (County Adjustment x County Adjustment Weight ).  Weight the adjustment score by the pct of the output county reporting - at 100% reporting, the adjustment score should be reduced to zero, regardless of what the internal counties' result. THe external Prediction for each OUtput County starts out matching county expectations, and moves towards the internal prediction as results come in, and moves towards all the other counties as they come in.
@@ -41,7 +41,7 @@ This adjustment should be weighted to the percent reporting (squared?), so that 
 
 #Load Packages
 (Hidden)
-```{r echo=FALSE}
+```{r warning=FALSE}
 library(ggplot2)
 library(ggcorrplot)
 #library(class)
@@ -148,7 +148,7 @@ scores = foreach (i = 1:nrow(clean_context_numeric_transformed), .combine='rbind
 toc()
 ```
 ###Explore Scores Table
-```{r}
+```{r eval=FALSE}
 #67 by 67 matrix
 str(scores)
 
@@ -175,6 +175,10 @@ county_results = select(county_expectations, state, FIPS) %>%
 ###sample results
 county_results[county_results$FIPS==1001,] = county_results[county_results$FIPS==1001,] %>%
   mutate(dem_votes.results = 5000, rep_votes.results = 20000, pct_complete = 1.00)
+county_results[county_results$FIPS==1003,] = county_results[county_results$FIPS==1003,] %>%
+  mutate(dem_votes.results = 6000, rep_votes.results = 40000, pct_complete = 0.5)
+county_results[county_results$FIPS==1005,] = county_results[county_results$FIPS==1005,] %>%
+  mutate(dem_votes.results = 500, rep_votes.results = 300, pct_complete = 0.05)
 
 
 county_results = county_results %>%
@@ -203,27 +207,82 @@ county_internal_predictions = left_join(county_expectations, county_results, by=
          rep_votes.ip = rep_votes.results + rep_votes.exp * (1 - pct_complete),
          two_party_votes.ip = dem_votes.ip + rep_votes.ip,
          dem_pct.ip = dem_votes.ip/two_party_votes.ip,
-         rep_pct.ip = rep_votes.ip/two_party_votes.ip
-         ) %>%
+         rep_pct.ip = rep_votes.ip/two_party_votes.ip) %>%
   select(state=state.x, FIPS, dem_votes.ip, rep_votes.ip, two_party_votes.ip, dem_pct.ip, rep_pct.ip, pct_complete)
 ```
 
 
-#County Adjustments
+#County Adjustments and Turnout Adjustments
 ```{r}
 #Compute county_results stats
 
-county_differences = county_internal_predictions %>%
+county_differences_full = county_internal_predictions %>%
   left_join(county_expectations, by= "FIPS") %>%
-  mutate(dem_difference = dem_pct.ip - dem_pct.exp) %>%
-  select(state = state.x, FIPS, dem_difference)
+  mutate(dem_pct_difference = dem_pct.ip - dem_pct.exp,
+         turnout_pct_difference = (two_party_votes.ip - two_party_votes.exp)/two_party_votes.exp) %>%
+  select(-state.y)
 
+county_differences = county_differences_full %>%
+  select(state = state.x, FIPS, dem_pct_difference, pct_complete, turnout_pct_difference)
+
+#head(county_differences_full)
 
 ```
 
 #County Adjustments Weight
-#County Turnout Adjustments
+```{r}
+#Weighting Function - starts at 0 with no completes, and slowly rises to .15 at 99% complete, then jumps to 1.00 at 100%
+weighting_levels = function(pct_input){
+  if (is.na(pct_input)) {
+    return(0)
+  } else if (pct_input == 1.00) {
+      return(1.00)
+  } else {
+    return(pct_input*0.30)
+  }
+}
+
+county_differences$adjustment_weight = apply(county_differences[,"pct_complete"],1,weighting_levels) 
+county_differences = county_differences %>%
+  mutate(dem_pct_difference_weighted = dem_pct_difference * adjustment_weight)
+
+```
+
+
 #County Turnout Adjustments Weight
+```{r}
+#Weighting Function - starts at 0 with no completes, and slowly rises to .15 at 99% complete, then jumps to 1.00 at 100%
+turnout_weighting_levels = function(pct_input){
+  if (is.na(pct_input)) {
+    return(0)
+  } else if (pct_input == 1.00) {
+      return(1.00)
+  } else {
+    return(pct_input*0.30)
+  }
+}
+
+county_differences$turnout_adjustment_weight = apply(county_differences[,"pct_complete"],1,turnout_weighting_levels) 
+county_differences = county_differences %>%
+  mutate(turnout_pct_difference_weighted = turnout_pct_difference * turnout_adjustment_weight)
+#Reorder columns
+county_differences = county_differences %>%
+  select(
+    state,
+    FIPS,
+    pct_complete,
+    dem_pct_difference,
+    adjustment_weight,
+    dem_pct_difference_weighted,
+    turnout_pct_difference,
+    turnout_adjustment_weight,
+    turnout_pct_difference_weighted
+  )
+
+```
+
+
+
 #County Predictions
 #County Turnout Predictions
 
