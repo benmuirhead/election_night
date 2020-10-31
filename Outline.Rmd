@@ -321,4 +321,22 @@ hist(county_demo_turnout_shift,25)
 county_differences = cbind(county_differences, as.data.frame(county_demo_turnout_shift,row.names = NA))
 ```
 
+#County External Predictions
+```{r}
+#county_differences[2,"demo_turnout_shift"] = 0.02
+#county_differences[2,"demo_shift"] = -0.02
+#county_internal_predictions[2,"pct_complete"] = 0.8
+
+county_external_predictions = county_internal_predictions %>%
+  left_join(select(county_differences,FIPS, demo_shift,demo_turnout_shift), by="FIPS") %>%
+  mutate(dem_pct.ep = dem_pct.ip + (demo_shift * (1-pct_complete^3)),
+         rep_pct.ep = 1- dem_pct.ep,
+         two_party_votes.ep = two_party_votes.ip * (1 + (demo_turnout_shift * (1-pct_complete^3))),
+         dem_votes.ep = round(dem_pct.ep * two_party_votes.ep),
+         rep_votes.ep = round(rep_pct.ep * two_party_votes.ep)
+         ) %>%
+  select(colnames(county_internal_predictions), dem_votes.ep, rep_votes.ep, two_party_votes.ep, dem_pct.ep, rep_pct.ep,demo_shift,demo_turnout_shift)
+
+
+```
 
