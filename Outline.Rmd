@@ -282,7 +282,43 @@ county_differences = county_differences %>%
 ```
 
 
-
 #County Predictions
+```{r}
+scores_inv = 1/(scores+1)
+hist(scores_inv,100)
+
+hist(as.matrix(county_differences[,"dem_pct_difference_weighted"]))
+
+scores_inv[is.na(scores_inv)] = 0
+
+#Cumulative weight on each row
+hist(apply(scores_inv,1,sum))
+
+county_demo_shift = scores_inv %*% as.matrix(county_differences[,"dem_pct_difference_weighted"])
+colnames(county_demo_shift) = "demo_shift"
+
+#Distribution of shifts
+hist(county_demo_shift,25)
+
+county_differences = cbind(county_differences, as.data.frame(county_demo_shift,row.names = NA))
+
+
+```
+
+
 #County Turnout Predictions
+```{r}
+
+hist(as.matrix(county_differences[,"turnout_pct_difference_weighted"]))
+
+
+county_demo_turnout_shift = scores_inv %*% as.matrix(county_differences[,"turnout_pct_difference_weighted"])
+colnames(county_demo_turnout_shift) = "demo_turnout_shift"
+
+#Distribution of shifts
+hist(county_demo_turnout_shift,25)
+
+county_differences = cbind(county_differences, as.data.frame(county_demo_turnout_shift,row.names = NA))
+```
+
 
