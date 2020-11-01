@@ -76,7 +76,9 @@ county_expectations = countypres_2016 %>%
   filter(party=="democrat") %>%
   #rename(state=state_po,dem_votes.exp = candidatevotes.y, rep_votes.exp = candidatevotes.x) %>%
   select(state=state_po,FIPS,dem_votes.exp = candidatevotes.y, rep_votes.exp = candidatevotes.x,two_party_votes.exp = two_party_votes) %>%
-  mutate(dem_pct.exp = dem_votes.exp/two_party_votes.exp,rep_pct.exp = rep_votes.exp/two_party_votes.exp)
+  mutate(dem_pct.exp = dem_votes.exp/two_party_votes.exp,rep_pct.exp = rep_votes.exp/two_party_votes.exp) %>%
+  #Delete Alaska
+    filter(state!="AK")
 
 
 ```
@@ -125,6 +127,20 @@ cleaned_context_numeric = context[!is.na(context["cvap"]),c("FIPS",cols_list)]
 preProcessValues=preProcess(cleaned_context_numeric[cols_list],method = "range",rangeBounds = c(0,1))
 clean_context_numeric_transformed = predict(object = preProcessValues, cleaned_context_numeric)
 ```
+
+```{r}
+
+#Show Counties missing from eaither context or county expectations
+full_join(cleaned_context_numeric[,1:2],county_expectations[,1:3], by="FIPS",keep=TRUE) %>%
+  select(FIPS.x, state, FIPS.y) %>%
+  filter(is.na(FIPS.x))
+  #summary() %
+
+
+
+```
+
+
 ##Build Scores Table
 ```{r}
 #Build Scores - takes 1 hour (5 seconds per row x 3100 rows)
@@ -151,21 +167,41 @@ scores = foreach (i = 1:nrow(clean_context_numeric_transformed), .combine='rbind
 }
 toc()
 ```
-###Explore Scores Table
-```{r eval=FALSE}
-#67 by 67 matrix
-str(scores)
 
-#to get the closest match for a row, use:
-x = c()
-for (i  in 1:67) {
-  row_to_search = i
-  closest_match = order(1/scores[row_to_search,],decreasing = TRUE,na.last = TRUE)[1]
-  x = c(x, (1/scores[row_to_search,closest_match]))
-  #print(clean_context_numeric_transformed[c(row_to_search,closest_match),])
-  
-}
-#hist(x,10)
+###Add Alaska null data - skipping, just remove AK from results
+```{r}
+
+# #Add Alaska
+# nrow(filter(county_expectations, state=="AK") %>% select(FIPS))
+# rbind(head(scores),
+#       filter(county_expectations, state=="AK") %>% select(FIPS))
+# 
+# str(head(scores,1))
+# str(matrix(rep(rep(as.numeric(NA),3111),nrow(filter(county_expectations, state=="AK") %>% select(FIPS)))
+#        ,nrow = nrow(filter(county_expectations, state=="AK") %>% select(FIPS)))
+# )
+# 
+# rbind.fill(head(scores),
+#       filter(county_expectations, state=="AK") %>% select(FIPS))
+# bind_rows(head(scores),
+#       filter(county_expectations, state=="AK") %>% select(FIPS))
+# 
+# rbind(head(scores),
+#   rep(rep(NA,3111),nrow(filter(county_expectations, state=="AK") %>% select(FIPS))
+#       )
+# )
+# str(
+#   rbind(head(scores,1),
+#   matrix(rep(rep(as.numeric(NA),length(scores[1,])),nrow(filter(county_expectations, state=="AK") %>% select(FIPS)))
+#        ,nrow = nrow(filter(county_expectations, state=="AK") %>% select(FIPS)))
+# )
+# )
+# 
+# scores = rbind(scores,
+#   matrix(rep(rep(as.numeric(NA),length(scores[1,])),nrow(filter(county_expectations, state=="AK") %>% select(FIPS)))
+#        ,nrow = nrow(filter(county_expectations, state=="AK") %>% select(FIPS)))
+# )
+# 
 
 ```
 
