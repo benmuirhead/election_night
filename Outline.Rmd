@@ -98,26 +98,28 @@ context = read.csv("election-context-2018.txt",header = TRUE,sep = ",")
 #### Filter to only AL
 context = context[context$state == "Alabama",]
 
+#Rename fip to FIPS
+colnames(context)[3] = "FIPS"
 
 #Bad Rows
 #context[is.na(context["cvap"]),]
 
 #remove Bedford VA - has been replaced
-context = context[context$fips != 51515,]
+context = context[context$FIPS != 51515,]
 
 #Set KC and Ogala to have all zeros in NA fields - currently no data
-#context[context$fips == 36000 | context$fips == 46113 ,]
+#context[context$FIPS == 36000 | context$FIPS == 46113 ,]
 context[is.na(context["cvap"]),][is.na(context[is.na(context["cvap"]),])] = 0
 
 #Cols to keep
 cols_list = colnames(context[,23:39])
 cols_list = cols_list[!cols_list %in% c("nonwhite_pct", "lesshs_whites_pct", "lesscollege_whites_pct", "ruralurban_cc","clf_unemploy_pct","cvap")]
 
-#Keep fips and cols_list
-cleaned_context = context[!is.na(context["cvap"]),c("fips",cols_list)]
+#Keep FIPS and cols_list
+cleaned_context = context[!is.na(context["cvap"]),c("FIPS",cols_list)]
 
 #Same thing as above
-cleaned_context_numeric = context[!is.na(context["cvap"]),c("fips",cols_list)]
+cleaned_context_numeric = context[!is.na(context["cvap"]),c("FIPS",cols_list)]
 
 #set range of cols to be 0 to 1
 preProcessValues=preProcess(cleaned_context_numeric[cols_list],method = "range",rangeBounds = c(0,1))
