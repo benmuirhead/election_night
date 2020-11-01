@@ -81,6 +81,14 @@ county_expectations = countypres_2016 %>%
     filter(state!="AK")
 
 
+# countypres_2000_2016[is.na(countypres_2000_2016$FIPS) & countypres_2000_2016$year==2016,]
+# countypres_2016[is.na(countypres_2016$FIPS),]
+# county_expectations[is.na(county_expectations$FIPS),]
+# 
+# countypres_2000_2016[countypres_2000_2016$FIPS %in% c(51515,51019),]
+# countypres_2016[countypres_2016$FIPS %in% c(51515,51019),]
+# county_expectations[county_expectations$FIPS %in% c(51515,51019),]
+
 ```
 
 
