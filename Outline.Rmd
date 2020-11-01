@@ -98,7 +98,7 @@ registerDoParallel(num_cores)
 context = read.csv("election-context-2018.txt",header = TRUE,sep = ",")
 
 #### Filter to only AL
-context = context[context$state == "Alabama",]
+#context = context[context$state == "Alabama",]
 
 #Rename fip to FIPS
 colnames(context)[3] = "FIPS"
