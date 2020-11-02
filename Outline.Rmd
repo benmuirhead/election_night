@@ -78,7 +78,7 @@ county_expectations = countypres_2016 %>%
   select(state=state_po,FIPS,dem_votes.exp = candidatevotes.y, rep_votes.exp = candidatevotes.x,two_party_votes.exp = two_party_votes) %>%
   mutate(dem_pct.exp = dem_votes.exp/two_party_votes.exp,rep_pct.exp = rep_votes.exp/two_party_votes.exp) %>%
   #Delete Alaska
-    filter(state!="AK")
+  filter(state!="AK")
 
 
 # countypres_2000_2016[is.na(countypres_2000_2016$FIPS) & countypres_2000_2016$year==2016,]
