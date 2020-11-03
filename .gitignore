@@ -10,3 +10,5 @@ County Presidential Returns 2000-2016.md
 countypres_2000-2016.csv
 election-context-2018.txt
 historical_data/
+.httr-oauth
+droptoken.rds
